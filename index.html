@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Invoice & Receipt Extractor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .drag-active {
+            border-color: #4f46e5 !important;
+            background-color: #e0e7ff !important;
+        }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .shimmer {
+            background: #f1f5f9;
+            background-image: linear-gradient(to right, #f1f5f9 0%, #e2e8f0 20%, #f1f5f9 40%, #f1f5f9 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 100%; 
+            animation-duration: 1.5s;
+            animation-fill-mode: forwards; 
+            animation-iteration-count: infinite;
+            animation-name: placeholderShimmer;
+            animation-timing-function: linear;
+        }
+        @keyframes placeholderShimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; } 
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center text-slate-800">
+
+    <div class="max-w-6xl w-full mx-auto space-y-8">
+        
+        <!-- Header -->
+        <header class="text-center space-y-3 pt-4">
+            <div class="inline-flex items-center justify-center p-3 bg-indigo-100 rounded-2xl mb-2">
+                <i class="fas fa-file-invoice-dollar text-3xl text-indigo-600"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Data Extractor Pro</h1>
+            <p class="text-slate-500 max-w-2xl mx-auto">Upload an invoice or receipt. Our AI will precisely extract Supplier & Buyer details, GST numbers, line items, and all miscellaneous data.</p>
+        </header>
+
+        <!-- Main Upload Section -->
+        <div class="glass-panel rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+                
+                <!-- Upload Zone -->
+                <div class="lg:col-span-1 flex flex-col h-full space-y-4">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <i class="fas fa-cloud-upload-alt text-indigo-500"></i> Document Source
+                    </h2>
+                    
+                    <div id="dropzone" class="flex-1 border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer transition-all hover:bg-slate-50 hover:border-slate-400 flex flex-col items-center justify-center min-h-[300px]">
+                        <div class="bg-indigo-50 p-4 rounded-full mb-4">
+                            <i class="fas fa-image text-3xl text-indigo-500"></i>
+                        </div>
+                        <p class="text-slate-700 font-medium mb-1">Drag & drop your document</p>
+                        <p class="text-sm text-slate-400 mb-4">or click to browse files</p>
+                        <span class="text-xs font-semibold px-3 py-1 bg-slate-100 text-slate-500 rounded-full">JPG, PNG up to 10MB</span>
+                        <input type="file" id="fileInput" class="hidden" accept="image/png, image/jpeg, image/jpg">
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div id="previewContainer" class="hidden relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex justify-center h-full min-h-[300px]">
+                        <img id="imagePreview" src="" alt="Document Preview" class="object-contain w-full h-full p-2">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
+                        <button id="removeBtn" class="absolute top-3 right-3 bg-white/90 backdrop-blur text-red-500 hover:text-red-600 rounded-full p-2 hover:bg-white shadow-sm transition-colors w-10 h-10 flex items-center justify-center">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+
+                    <button id="extractBtn" disabled class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-xl transition-all flex justify-center items-center gap-2 shadow-sm hover:shadow-md transform active:scale-[0.98]">
+                        <span>Extract All Data</span>
+                        <i class="fas fa-bolt"></i>
+                    </button>
+
+                    <div id="errorContainer" class="hidden text-red-600 text-sm bg-red-50 p-4 rounded-xl border border-red-100"></div>
+                </div>
+
+                <!-- Results Loading & Placeholder Section -->
+                <div class="lg:col-span-2 bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col h-full min-h-[400px]">
+                    
+                    <div id="resultsPlaceholder" class="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-4 text-center">
+                        <div class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-2">
+                            <i class="fas fa-microchip text-4xl text-slate-300"></i>
+                        </div>
+                        <h3 class="text-lg font-medium text-slate-600">Awaiting Document</h3>
+                        <p class="max-w-xs text-sm">Upload a document to extract supplier, buyer, items, and tax information instantly.</p>
+                    </div>
+
+                    <div id="loadingSkeleton" class="hidden space-y-8 w-full h-full">
+                        <div class="flex items-center justify-center mb-8">
+                            <div class="text-indigo-600 flex flex-col items-center gap-3">
+                                <i class="fas fa-circle-notch fa-spin text-4xl"></i>
+                                <span class="font-medium animate-pulse">Analyzing document structure...</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="h-32 shimmer rounded-2xl w-full"></div>
+                            <div class="h-32 shimmer rounded-2xl w-full"></div>
+                        </div>
+                        <div class="h-12 shimmer rounded-xl w-full"></div>
+                        <div class="space-y-3">
+                            <div class="h-10 shimmer rounded-lg w-full"></div>
+                            <div class="h-10 shimmer rounded-lg w-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Actual Results Container -->
+                    <div id="resultsContainer" class="hidden space-y-8 w-full animate-fade-in pb-4 h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                        
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+                            <h2 class="text-xl font-bold text-slate-800">Extraction Results</h2>
+                            <span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                                <i class="fas fa-check-circle"></i> Success
+                            </span>
+                        </div>
+
+                        <!-- General Document Info Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="docInfoGrid">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <!-- Entities (Supplier / Buyer) Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
+                            <!-- Supplier Card -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="bg-indigo-50/50 border-b border-slate-100 px-4 py-3 flex items-center gap-2">
+                                    <i class="fas fa-building text-indigo-500"></i>
+                                    <h3 class="font-semibold text-slate-800">Supplier Details</h3>
+                                </div>
+                                <div class="p-4 space-y-3" id="supplierDetails">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Buyer Card -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="bg-emerald-50/50 border-b border-slate-100 px-4 py-3 flex items-center gap-2">
+                                    <i class="fas fa-user-tie text-emerald-600"></i>
+                                    <h3 class="font-semibold text-slate-800">Buyer Details</h3>
+                                </div>
+                                <div class="p-4 space-y-3" id="buyerDetails">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Items Table -->
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div class="bg-slate-50 border-b border-slate-200 px-5 py-4 flex items-center gap-2">
+                                <i class="fas fa-list text-slate-500"></i>
+                                <h3 class="font-semibold text-slate-800">Line Items</h3>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left text-slate-600">
+                                    <thead class="text-xs text-slate-500 uppercase bg-slate-50/50">
+                                        <tr>
+                                            <th scope="col" class="px-5 py-3 font-medium">Description</th>
+                                            <th scope="col" class="px-5 py-3 font-medium text-right">Qty</th>
+                                            <th scope="col" class="px-5 py-3 font-medium text-right">Unit Price</th>
+                                            <th scope="col" class="px-5 py-3 font-medium text-right">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="itemsTableBody" class="divide-y divide-slate-100">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Financials & Misc Layout -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                            
+                            <!-- Miscellaneous Data -->
+                            <div class="bg-amber-50/50 rounded-2xl border border-amber-100 p-5">
+                                <h3 class="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-asterisk text-amber-500"></i> Miscellaneous / Notes
+                                </h3>
+                                <ul id="miscList" class="space-y-2 text-sm text-amber-900/80 list-disc list-inside">
+                                    <!-- Populated dynamically -->
+                                </ul>
+                            </div>
+
+                            <!-- Financial Summary -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                                <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                                    <i class="fas fa-calculator text-slate-500"></i> Financial Summary
+                                </h3>
+                                <div class="flex justify-between text-sm text-slate-600">
+                                    <span>Subtotal</span>
+                                    <span class="font-medium" id="valSubtotal">-</span>
+                                </div>
+                                <div class="flex justify-between text-sm text-slate-600 pb-3 border-b border-slate-100">
+                                    <span>Tax Amount (GST/VAT)</span>
+                                    <span class="font-medium" id="valTax">-</span>
+                                </div>
+                                <div class="flex justify-between items-center pt-1">
+                                    <span class="font-bold text-slate-800">Grand Total</span>
+                                    <span class="text-xl font-bold text-indigo-600" id="valTotal">-</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const removeBtn = document.getElementById('removeBtn');
+        const extractBtn = document.getElementById('extractBtn');
+        const resultsPlaceholder = document.getElementById('resultsPlaceholder');
+        const loadingSkeleton = document.getElementById('loadingSkeleton');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const errorContainer = document.getElementById('errorContainer');
+
+        let currentBase64Image = null;
+        let currentMimeType = null;
+
+        // --- Drag & Drop Handlers ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.add('drag-active'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.remove('drag-active'), false);
+        });
+
+        dropzone.addEventListener('drop', e => handleFiles(e.dataTransfer.files[0]), false);
+        dropzone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => handleFiles(e.target.files[0]));
+        removeBtn.addEventListener('click', resetUpload);
+        
+        function handleFiles(file) {
+            if(!file) return;
+            errorContainer.classList.add('hidden');
+            
+            if (!file.type.startsWith('image/')) {
+                showError("Please upload a valid image file (PNG, JPG, JPEG).");
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showError("File is too large. Maximum size is 10MB.");
+                return;
+            }
+
+            currentMimeType = file.type;
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const result = e.target.result;
+                imagePreview.src = result;
+                currentBase64Image = result.split(',')[1];
+                
+                dropzone.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+                extractBtn.disabled = false;
+                resetResultsArea();
+            };
+            
+            reader.onerror = () => showError("Failed to read the file.");
+            reader.readAsDataURL(file);
+        }
+
+        function resetUpload() {
+            fileInput.value = '';
+            currentBase64Image = null;
+            currentMimeType = null;
+            imagePreview.src = '';
+            
+            previewContainer.classList.add('hidden');
+            dropzone.classList.remove('hidden');
+            extractBtn.disabled = true;
+            resetResultsArea();
+            errorContainer.classList.add('hidden');
+        }
+
+        function resetResultsArea() {
+            resultsContainer.classList.add('hidden');
+            loadingSkeleton.classList.add('hidden');
+            resultsPlaceholder.classList.remove('hidden');
+        }
+
+        function showError(msg) {
+            errorContainer.textContent = msg;
+            errorContainer.classList.remove('hidden');
+        }
+
+        extractBtn.addEventListener('click', async () => {
+            if (!currentBase64Image) return;
+
+            // UI Loading State
+            extractBtn.disabled = true;
+            const originalBtnContent = extractBtn.innerHTML;
+            extractBtn.innerHTML = '<div class="spinner"></div><span>Extracting...</span>';
+            
+            resultsPlaceholder.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
+            loadingSkeleton.classList.remove('hidden');
+            errorContainer.classList.add('hidden');
+
+            try {
+                const apiKey = ""; // API Key handled by Canvas environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+                const prompt = `Carefully analyze this image. Extract ALL visible data. 
+                Pay extreme attention to: 
+                1. Full Supplier details (Name, full address, contact, GST/Tax ID).
+                2. Full Buyer details (Name, full address, contact, GST/Tax ID).
+                3. Overall Invoice/Receipt details (Number, Date, Time, General GST number if not attached to a specific entity).
+                4. Line items with quantities and prices.
+                5. Tax breakdown and totals.
+                6. Any other text, terms, or notes MUST be included in the 'miscellaneous' array. 
+                Leave no text behind. If a field is not present, leave it empty.`;
+
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: currentMimeType || "image/jpeg", data: currentBase64Image } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                supplier: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        name: { type: "STRING" },
+                                        address: { type: "STRING" },
+                                        contact: { type: "STRING" },
+                                        gstOrTaxId: { type: "STRING", description: "Supplier's GSTIN, VAT, or Tax ID" }
+                                    }
+                                },
+                                buyer: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        name: { type: "STRING" },
+                                        address: { type: "STRING" },
+                                        contact: { type: "STRING" },
+                                        gstOrTaxId: { type: "STRING", description: "Buyer's GSTIN, VAT, or Tax ID" }
+                                    }
+                                },
+                                invoiceDetails: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        invoiceNumber: { type: "STRING" },
+                                        date: { type: "STRING" },
+                                        time: { type: "STRING" },
+                                        generalGstNumber: { type: "STRING", description: "Any prominent GST number if it couldn't be clearly assigned to Buyer or Supplier" }
+                                    }
+                                },
+                                financialSummary: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        subtotal: { type: "STRING" },
+                                        taxAmount: { type: "STRING" },
+                                        totalAmount: { type: "STRING" }
+                                    }
+                                },
+                                items: {
+                                    type: "ARRAY",
+                                    items: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            description: { type: "STRING" },
+                                            quantity: { type: "STRING" },
+                                            unitPrice: { type: "STRING" },
+                                            totalPrice: { type: "STRING" }
+                                        }
+                                    }
+                                },
+                                miscellaneous: {
+                                    type: "ARRAY",
+                                    items: { type: "STRING" },
+                                    description: "Any other data, terms, conditions, notes, or unmatched text."
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API Request Failed: ${response.status}`);
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                    const extractedData = JSON.parse(result.candidates[0].content.parts[0].text);
+                    renderResults(extractedData);
+                } else {
+                    throw new Error("Invalid response format from AI.");
+                }
+
+            } catch (error) {
+                console.error("Extraction Error:", error);
+                showError(`Extraction failed: ${error.message}. Please try again.`);
+                resetResultsArea();
+            } finally {
+                extractBtn.disabled = false;
+                extractBtn.innerHTML = originalBtnContent;
+                loadingSkeleton.classList.add('hidden');
+            }
+        });
+
+        function renderResults(data) {
+            resultsContainer.classList.remove('hidden');
+
+            // 1. General Invoice Details Grid
+            const inv = data.invoiceDetails || {};
+            const docInfoItems = [
+                { label: 'Invoice No.', value: inv.invoiceNumber, icon: 'fa-hashtag' },
+                { label: 'Date', value: inv.date, icon: 'fa-calendar' },
+                { label: 'Time', value: inv.time, icon: 'fa-clock' },
+                { label: 'General GST', value: inv.generalGstNumber, icon: 'fa-id-card' }
+            ];
+            
+            document.getElementById('docInfoGrid').innerHTML = docInfoItems.map(item => `
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1 mb-1">
+                        <i class="fas ${item.icon}"></i> ${item.label}
+                    </span>
+                    <span class="font-medium text-slate-800 text-sm truncate" title="${item.value || '-'}">${item.value || '-'}</span>
+                </div>
+            `).join('');
+
+            // 2. Helper to render Entity details (Supplier/Buyer)
+            const renderEntity = (containerId, entityData) => {
+                const container = document.getElementById(containerId);
+                const e = entityData || {};
+                
+                const createRow = (label, value) => {
+                    if(!value) return '';
+                    return `
+                    <div>
+                        <span class="block text-xs font-medium text-slate-400 mb-0.5">${label}</span>
+                        <span class="block text-sm text-slate-700 whitespace-pre-wrap">${value}</span>
+                    </div>`;
+                };
+
+                const content = [
+                    createRow('Name', e.name),
+                    createRow('GST / Tax ID', e.gstOrTaxId ? `<span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700 font-semibold border border-slate-200">${e.gstOrTaxId}</span>` : null),
+                    createRow('Contact', e.contact),
+                    createRow('Address', e.address)
+                ].filter(Boolean).join('');
+
+                container.innerHTML = content || '<span class="text-sm text-slate-400 italic">No details found.</span>';
+            };
+
+            renderEntity('supplierDetails', data.supplier);
+            renderEntity('buyerDetails', data.buyer);
+
+            // 3. Line Items
+            const tbody = document.getElementById('itemsTableBody');
+            if (data.items && data.items.length > 0) {
+                tbody.innerHTML = data.items.map(item => `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-3 text-slate-800 font-medium whitespace-normal break-words">${item.description || '-'}</td>
+                        <td class="px-5 py-3 text-right text-slate-600">${item.quantity || '-'}</td>
+                        <td class="px-5 py-3 text-right text-slate-600">${item.unitPrice || '-'}</td>
+                        <td class="px-5 py-3 text-right text-slate-800 font-semibold">${item.totalPrice || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-5 py-8 text-center text-slate-400 italic">No individual line items detected.</td></tr>`;
+            }
+
+            // 4. Financials
+            const fin = data.financialSummary || {};
+            document.getElementById('valSubtotal').textContent = fin.subtotal || '-';
+            document.getElementById('valTax').textContent = fin.taxAmount || '-';
+            document.getElementById('valTotal').textContent = fin.totalAmount || '-';
+
+            // 5. Miscellaneous
+            const miscList = document.getElementById('miscList');
+            if (data.miscellaneous && data.miscellaneous.length > 0) {
+                // Filter out empty strings just in case
+                const validMisc = data.miscellaneous.filter(m => m.trim().length > 0);
+                if(validMisc.length > 0){
+                     miscList.innerHTML = validMisc.map(m => `<li>${m}</li>`).join('');
+                } else {
+                     miscList.innerHTML = `<li class="list-none italic opacity-70">No extra data found.</li>`;
+                }
+            } else {
+                miscList.innerHTML = `<li class="list-none italic opacity-70">No extra data found.</li>`;
+            }
+        }
+    </script>
+</body>
+</html>
